@@ -2892,6 +2892,10 @@ class Cetak_raport_pts extends CI_Controller
                                 FROM t_catatan_homeroom a 
                                 WHERE a.id_siswa = $id_siswa AND a.ta = '$tasm'")->row_array();
         $d['catatan_homeroom'] = $q_catatan_homeroom;
+
+        $partsName = explode("_", $d['det_siswa']['nama']);
+        $d['det_siswa']['nama'] = $partsName[0];
+
         $this->load->view('cetak_pts_ikm', $d);
         $html = ob_get_contents();
         ob_end_clean();
@@ -3507,8 +3511,11 @@ class Cetak_raport_pts extends CI_Controller
         $jenis_rapor = getJenisRaport($d['det_raport']->id, $siswa->tingkat);
         $r = ($jenis_rapor->nama ?? "") == "K13" ? 2 : 1; // 1. kurmer, 2. k13
 
+        $partsName = explode("_", $siswa->nama);
+        $namaSiswa = $partsName[0];
+
         $d = [
-            "nama" => $siswa->nama,
+            "nama" => $namaSiswa,
             "nis" => $siswa->nis,
             "nisn" => $siswa->nisn,
             "kelas" => $wali_kelas->nmkelas,
@@ -3523,10 +3530,10 @@ class Cetak_raport_pts extends CI_Controller
             "tipe_rapor" => $r,
             "catatan_ht" => $catatan_ht->catatan_mid ?? "",
             "catatan_naik_kelas" => $catatan_naik_kelas->catatan_wali ?? "",
-            "capaian_kl1" => $kl1->capaian_mid,
-            "catatan_kl1" => $kl1->catatan_mid,
-            "capaian_kl2" => $kl2->capaian_mid,
-            "catatan_kl2" => $kl2->catatan_mid,
+            "capaian_kl1" => $kl1->capaian_mid ?? "",
+            "catatan_kl1" => $kl1->catatan_mid ?? "",
+            "capaian_kl2" => $kl2->capaian_mid ?? "",
+            "catatan_kl2" => $kl2->catatan_mid ?? "",
         ];
 
         $pengetahuan = $this->hitung_nilai_pengetahuan('t_nilai', $id_siswa, $tasm, $siswa, $r);
@@ -3626,7 +3633,7 @@ class Cetak_raport_pts extends CI_Controller
             $pdf->writeHTML($html);
             
             if (file_exists($pdfPath)) {
-                @unlink($pdfPath);
+@unlink($pdfPath);
             }
             // Simpan PDF baru
             $pdf->output($pdfPath, 'F');
@@ -3943,7 +3950,7 @@ class Cetak_raport_pts extends CI_Controller
                 $pdf->setTestTdInOnePage(false);
                 $pdf->writeHTML($html);
                 if (file_exists($pdfFile)) {
-                    @unlink($pdfFile);
+@unlink($pdfFile);
                 }
                 $pdf->output($pdfFile, 'F');
             }

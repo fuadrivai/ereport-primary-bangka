@@ -1736,6 +1736,8 @@ class Cetak_raport extends CI_Controller
                                     FROM t_naikkelas a 
                                     WHERE a.id_siswa = $id_siswa AND a.ta = '$tasm'")->row_array();
         $d['catatan'] = $q_catatan;
+        $partsName = explode("_", $d['det_siswa']['nama']);
+        $d['det_siswa']['nama'] = $partsName[0];
         if (!$isK13) {
             $this->load->view('cetak_ikm', $d);
         } else {
@@ -3127,8 +3129,11 @@ class Cetak_raport extends CI_Controller
         $jenis_rapor = getJenisRaport($d['det_raport']->id, $siswa->tingkat);
         $r = ($jenis_rapor->nama ?? "") == "K13" ? 2 : 1; // 1. kurmer, 2. k13
 
+        $partsName = explode(" ", $siswa->nama);
+        $namaSiswa = $partsName[0] ;
+
         $d = [
-            "nama" => $siswa->nama,
+            "nama" => $namaSiswa,
             "nis" => $siswa->nis,
             "nisn" => $siswa->nisn,
             "kelas" => $wali_kelas->nmkelas,
@@ -3292,7 +3297,7 @@ class Cetak_raport extends CI_Controller
             $response =  $this->_generate_remote_pdf($html, $filename);
             if ($response['http_code'] == 200 && $response['pdf_content']) {
                 if (file_exists($pdfPath)) {
-                    @unlink($pdfPath);
+@unlink($pdfPath);
                 }
                 file_put_contents($pdfPath, $response['pdf_content']);
             } else {
@@ -3630,7 +3635,7 @@ class Cetak_raport extends CI_Controller
                 
                 if ($response['http_code'] == 200 && $response['pdf_content']) {
                     if (file_exists($pdfFile)) {
-                        @unlink($pdfFile);
+@unlink($pdfFile);
                     }
                     file_put_contents($pdfPath, $response['pdf_content']);
                 } else {
