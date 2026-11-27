@@ -154,6 +154,7 @@ class Cetak_raport extends CI_Controller
                                     INNER JOIN t_mapel_kd d ON a.id_mapel_kd = d.id
                                     WHERE a.id_siswa = $id_siswa
                                     AND a.tasm = '" . $tasm . "'")->result_array();
+        $ambil_uts = get_nilai_uts('t_nilai', $id_siswa, $tasm);
 
 
         $ambil_np_submp = $this->db->query("SELECT 
@@ -186,6 +187,24 @@ class Cetak_raport extends CI_Controller
                 $array1[$idx]['a'] = $a2['nilai'];
             } else if ($a2['jenis'] == "c") {
                 $array1[$idx]['c'] = $a2['catatan'];
+            } else if ($a2['jenis'] == "p") {
+                $array1[$idx]['p'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "b") {
+                $array1[$idx]['b'] = $a2['nilai'];
+            }
+        }
+        foreach ($ambil_uts as $a2) {
+            $idx = $a2['idmapel'];
+            if ($a2['jenis'] == "t") {
+                $array1[$idx]['t'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "a") {
+                $array1[$idx]['a'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "c") {
+                $array1[$idx]['c'] = $a2['catatan'];
+            } else if ($a2['jenis'] == "p") {
+                $array1[$idx]['p'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "b") {
+                $array1[$idx]['b'] = $a2['nilai'];
             }
         }
 
@@ -205,12 +224,6 @@ class Cetak_raport extends CI_Controller
             $d['kkm'] = $d['kkm'];
         }
         //echo var_dump($array1);
-
-        $bobot_h = $this->config->item('pnp_h');
-        $bobot_t = $this->config->item('pnp_t');
-        $bobot_a = $this->config->item('pnp_a');
-
-        $jml_bobot = $bobot_h + $bobot_t + $bobot_a;
 
         //MULAI HITUNG..
         $nilai_pengetahuan = array();
@@ -254,10 +267,14 @@ class Cetak_raport extends CI_Controller
 
             $__tengah = empty($array1[$k]['t']) ? 0 : $array1[$k]['t'];
             $__akhir = empty($array1[$k]['a']) ? 0 : $array1[$k]['a'];
-
-            $_np = round(((($bobot_h / $jml_bobot) * ($jumlah_n_h / $jumlah_h)) +
-                (($bobot_t / $jml_bobot) * $__tengah) +
-                (($bobot_a / $jml_bobot) * $__akhir)), 0);
+            $components_np = [
+                'h' => $array1[$k]['h'] ?? [],
+                'b' => $array1[$k]['b'] ?? 0,
+                't' => $__tengah,
+                'a' => $__akhir,
+                'p' => $array1[$k]['p'] ?? 0,
+            ];
+            $_np = hitung_nilai_sop($components_np, $k, (int)$d['semester'], false, $siswa['tingkat'] ?? null);
 
             $nilai_pengetahuan[$k]['nilai'] = number_format($_np);
             $nilai_pengetahuan[$k]['predikat'] = nilai_huruf($kkmx, $_np);
@@ -933,21 +950,7 @@ class Cetak_raport extends CI_Controller
                                 AND a.tasm = '" . $tasm . "'
                                 AND a.nilai != 0
                                 ")->result_array();
-        $ambil_uts = $this->db->query("SELECT 
-                        c.id idmapel, c.kkm, c.lang, a.tasm, c.kd_singkat, a.jenis, a.catatan, a.nilai as nilai
-                        FROM t_nilai a
-                        INNER JOIN m_mapel c ON a.id_mapel_kd = c.id
-                        WHERE 
-                        a.jenis= 't'
-                        AND a.id_siswa = $id_siswa
-                        AND a.tasm = '" . $tasm . "'
-                        OR a.jenis= 'a'
-                        AND a.id_siswa = $id_siswa
-                        AND a.tasm = '" . $tasm . "'
-                        OR a.jenis= 'c'
-                        AND a.id_siswa = $id_siswa
-                        AND a.tasm = '" . $tasm . "'
-        ")->result_array();
+        $ambil_uts = get_nilai_uts('t_nilai', $id_siswa, $tasm);
         $ambil_np_submp = $this->db->query("SELECT 
                                     b.id_mapel, c.kd_singkat
                                     FROM t_nilai a
@@ -978,6 +981,10 @@ class Cetak_raport extends CI_Controller
                 $array1[$idx]['a'] = $a2['nilai'];
             } else if ($a2['jenis'] == "c") {
                 $array1[$idx]['c'] = $a2['catatan'];
+            } else if ($a2['jenis'] == "p") {
+                $array1[$idx]['p'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "b") {
+                $array1[$idx]['b'] = $a2['nilai'];
             }
         }
         foreach ($ambil_uts as $a2) {
@@ -995,6 +1002,10 @@ class Cetak_raport extends CI_Controller
                 $array1[$idx]['a'] = $a2['nilai'];
             } else if ($a2['jenis'] == "c") {
                 $array1[$idx]['c'] = $a2['catatan'];
+            } else if ($a2['jenis'] == "p") {
+                $array1[$idx]['p'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "b") {
+                $array1[$idx]['b'] = $a2['nilai'];
             }
         }
 
@@ -1013,12 +1024,6 @@ class Cetak_raport extends CI_Controller
             $d['kkm'] = $d['kkm'];
         }
         //echo var_dump($array1);
-
-        $bobot_h = $this->config->item('pnp_h');
-        $bobot_t = $this->config->item('pnp_t');
-        $bobot_a = $this->config->item('pnp_a');
-
-        $jml_bobot = $bobot_h + $bobot_t + $bobot_a;
 
         //MULAI HITUNG..
         $nilai_pengetahuan = array();
@@ -1062,8 +1067,14 @@ class Cetak_raport extends CI_Controller
 
             $__tengah = empty($array1[$k]['t']) ? 0 : $array1[$k]['t'];
             $__akhir = empty($array1[$k]['a']) ? 0 : $array1[$k]['a'];
-
-            $_np = round((((2 * ($jumlah_n_h / $jumlah_h)) + $__tengah + $__akhir) / 4), 0);
+            $components_np = [
+                'h' => $array1[$k]['h'] ?? [],
+                'b' => $array1[$k]['b'] ?? 0,
+                't' => $__tengah,
+                'a' => $__akhir,
+                'p' => $array1[$k]['p'] ?? 0,
+            ];
+            $_np = hitung_nilai_sop($components_np, $k, (int)$d['semester'], false, $tingkat);
 
             $nilai_pengetahuan[$k]['nilai'] = number_format($_np);
             $nilai_pengetahuan[$k]['predikat'] = nilai_huruf($kkmx, $_np);
@@ -2057,6 +2068,7 @@ class Cetak_raport extends CI_Controller
                                     INNER JOIN t_mapel_kd d ON a.id_mapel_kd = d.id
                                     WHERE a.id_siswa = $id_siswa
                                     AND a.tasm = '" . $tasm . "'")->result_array();
+        $ambil_uts = get_nilai_uts('t_nilai', $id_siswa, $tasm);
 
 
         $ambil_np_submp = $this->db->query("SELECT 
@@ -2089,6 +2101,24 @@ class Cetak_raport extends CI_Controller
                 $array1[$idx]['a'] = $a2['nilai'];
             } else if ($a2['jenis'] == "c") {
                 $array1[$idx]['c'] = $a2['catatan'];
+            } else if ($a2['jenis'] == "p") {
+                $array1[$idx]['p'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "b") {
+                $array1[$idx]['b'] = $a2['nilai'];
+            }
+        }
+        foreach ($ambil_uts as $a2) {
+            $idx = $a2['idmapel'];
+            if ($a2['jenis'] == "t") {
+                $array1[$idx]['t'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "a") {
+                $array1[$idx]['a'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "c") {
+                $array1[$idx]['c'] = $a2['catatan'];
+            } else if ($a2['jenis'] == "p") {
+                $array1[$idx]['p'] = $a2['nilai'];
+            } else if ($a2['jenis'] == "b") {
+                $array1[$idx]['b'] = $a2['nilai'];
             }
         }
 
@@ -2109,12 +2139,6 @@ class Cetak_raport extends CI_Controller
             $d['kkm'] = $d['kkm'];
         }
         //echo var_dump($array1);
-
-        $bobot_h = $this->config->item('pnp_h');
-        $bobot_t = $this->config->item('pnp_t');
-        $bobot_a = $this->config->item('pnp_a');
-
-        $jml_bobot = $bobot_h + $bobot_t + $bobot_a;
 
         //MULAI HITUNG..
         $nilai_pengetahuan = array();
@@ -2158,10 +2182,14 @@ class Cetak_raport extends CI_Controller
 
             $__tengah = empty($array1[$k]['t']) ? 0 : $array1[$k]['t'];
             $__akhir = empty($array1[$k]['a']) ? 0 : $array1[$k]['a'];
-
-            $_np = round(((($bobot_h / $jml_bobot) * ($jumlah_n_h / $jumlah_h)) +
-                (($bobot_t / $jml_bobot) * $__tengah) +
-                (($bobot_a / $jml_bobot) * $__akhir)), 0);
+            $components_np = [
+                'h' => $array1[$k]['h'] ?? [],
+                'b' => $array1[$k]['b'] ?? 0,
+                't' => $__tengah,
+                'a' => $__akhir,
+                'p' => $array1[$k]['p'] ?? 0,
+            ];
+            $_np = hitung_nilai_sop($components_np, $k, (int)$d['semester'], false, $siswa['tingkat'] ?? null);
 
             $nilai_pengetahuan[$k]['nilai'] = number_format($_np);
             $nilai_pengetahuan[$k]['predikat'] = nilai_huruf($kkmx, $_np);
@@ -3379,8 +3407,14 @@ class Cetak_raport extends CI_Controller
 
             $__tengah = empty($k['t']) ? 0 : $k['t'];
             $__akhir = empty($k['a']) ? 0 : $k['a'];
-
-            $_np = round((((2 * ($jumlah_n_h / $jumlah_h)) + $__tengah + $__akhir) / 4), 0);
+            $components_np = [
+                'h' => $k['h'] ?? [],
+                'b' => $k['b'] ?? 0,
+                't' => $__tengah,
+                'a' => $__akhir,
+                'p' => $k['p'] ?? 0,
+            ];
+            $_np = hitung_nilai_sop($components_np, $k['id_mapel'], (int)substr($tasm, 4, 1), false, $siswa->tingkat ?? null);
 
             $guru_mapel = get_guru_mapel($k['id_mapel'], $siswa->id_kelas, $tasm);
             $pengetahuan = [
@@ -3440,6 +3474,10 @@ class Cetak_raport extends CI_Controller
                         $data_nilai['t'] = $a2['nilai'];
                     } else if ($a2['jenis'] == "c") {
                         $data_nilai['c'] = $a2['catatan'];
+                    } else if ($a2['jenis'] == "p") {
+                        $data_nilai['p'] = $a2['nilai'];
+                    } else if ($a2['jenis'] == "b") {
+                        $data_nilai['b'] = $a2['nilai'];
                     } else if ($a2['jenis'] == "h") {
                         $data_nilai['h'][] = $a2['nilai'];
                     }
@@ -3454,6 +3492,10 @@ class Cetak_raport extends CI_Controller
                         $data_nilai['t'] = $a2['nilai'];
                     } else if ($a2['jenis'] == "c") {
                         $data_nilai['c'] = $a2['catatan'];
+                    } else if ($a2['jenis'] == "p") {
+                        $data_nilai['p'] = $a2['nilai'];
+                    } else if ($a2['jenis'] == "b") {
+                        $data_nilai['b'] = $a2['nilai'];
                     } else if ($a2['jenis'] == "h") {
                         $data_nilai['h'][] = $a2['nilai'];
                     }

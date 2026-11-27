@@ -117,7 +117,7 @@ function nilai_pre($kkm, $nilai, $lang)
 function generate_menu($level, $is_wali = false)
 {
 		$menu = '<style>
-		@keyframes fly {
+@keyframesfly {
 			0% { transform: translateY(0) rotate(-5deg); }
 			50% { transform: translateY(-3px) rotate(-5deg); }
 			100% { transform: translateY(0) rotate(-5deg); }
@@ -174,6 +174,7 @@ function generate_menu($level, $is_wali = false)
 		<li><a href="' . base_url() . 'lesson_plan"><i class="pe-7s-magic-wand"></i><p>Lesson Plan Generator <span class="flying-badge">NEW</span></p></a></li>
 		<li><a href="' . base_url() . 'view_mapel"><i class="pe-7s-note2"></i><p>Subjects</p></a></li>
 		            <li><a href="' . base_url() . 'riwayat_mengajar"><i class="pe-7s-file"></i><p>Teaching History</p></a></li>
+					<li><a href="' . base_url() . 'view_ledger"><i class="pe-7s-bookmarks"></i><p>View Ledger</p></a></li>
 					';
 		$menu .= $is_wali == TRUE ? '<li class="devider"></li>
 		                            <li><a href="' . base_url() . 'pengumuman"><i class="pe-7s-bell"></i><p>Pengumuman</p></a></li>
@@ -529,30 +530,17 @@ function get_nilai_sub($table, $id_siswa, $tasm)
 	return $ambil_np_submp;
 }
 
-function get_nilai_uts($table, $id_siswa, $tasm)
+function get_nilai_uts($table, $id_siswa, $tasm, $mid = false)
 {
 	$CI2 = &get_instance();
-	$ambil_uts = $CI2->db->query("SELECT 
-                        c.id idmapel, c.kkm, c.lang, a.tasm, c.kd_singkat, a.jenis, a.catatan, a.nilai as nilai
+	$ambil_uts = $CI2->db->query("SELECT
+                        c.id idmapel, c.kkm, c.lang, a.tasm, c.kd_singkat, a.jenis, a.catatan, a.nilai
                         FROM $table a
-                        INNER JOIN m_mapel c ON a.id_mapel_kd = c.id
-                        WHERE 
-                        a.jenis= 't'
-                        AND a.id_siswa = $id_siswa
-                        AND a.tasm = '" . $tasm . "'
-						OR
-                                a.jenis= 'a'
-                                AND a.id_siswa = $id_siswa
-                                AND a.tasm = '" . $tasm . "'
-                                OR
-                                a.jenis= 'c'
-                                AND a.id_siswa = $id_siswa
-                                AND a.tasm = '" . $tasm . "'
-                                OR
-                                a.jenis= 'p'
-                                AND a.id_siswa = $id_siswa
-                                AND a.tasm = '" . $tasm . "'
-                        ")->result_array();
+                        INNER JOIN t_guru_mapel b ON a.id_guru_mapel = b.id
+                        INNER JOIN m_mapel c ON b.id_mapel = c.id
+                        WHERE a.jenis IN ('t', 'a', 'p', 'b', 'c')
+                        AND a.id_siswa = ?
+                        AND a.tasm = ?", array($id_siswa, $tasm))->result_array();
 	return $ambil_uts;
 }
 
@@ -612,4 +600,479 @@ function get_exschool($id_siswa, $tasm)
 	//echo $CI2->db->last_query();
 
 	return $q_nilai_ekstra;
+}
+
+function get_kategori_penilaian_mapel($id_or_code_or_name, $force_refresh = false)
+{
+	static $categories = null;
+
+	if ($force_refresh) {
+		$categories = null;
+	}
+
+	$classify = function ($code, $name) {
+		$code = strtoupper(trim((string)$code));
+		$text = strtoupper(trim((string)$name));
+		$without_written_codes = array('MUS', 'PE', 'PKWU', 'BTQ', 'TH', 'HMT', 'ART', 'SBDP', 'PJOK', 'PJKES');
+
+		if (in_array($code, $without_written_codes, true) ||
+			strpos($text, 'PHYSICAL EDUCATION') !== false ||
+			strpos($text, 'PJKES') !== false ||
+			strpos($text, 'PJOK') !== false ||
+			strpos($text, 'MUSIC') !== false ||
+			strpos($text, 'SENI MUSIK') !== false ||
+			strpos($text, 'SENI BUDAYA') !== false ||
+			strpos($text, 'SBDP') !== false ||
+			strpos($text, 'MAKERSPACE') !== false ||
+			strpos($text, 'PRAKARYA') !== false ||
+			strpos($text, 'PKWU') !== false ||
+			strpos($text, 'BACA TULIS QURAN') !== false ||
+			strpos($text, 'BTQ') !== false ||
+			strpos($text, 'TAHFIZ') !== false ||
+			strpos($text, 'HAFALAN') !== false ||
+			strpos($text, 'QURAN') !== false ||
+			strpos($text, 'PROJECT') !== false) {
+			return 'without_written';
+		}
+
+		$with_performance_codes = array('SC', 'SCIE', 'SCI', 'PHY', 'CHEM', 'BIO', 'CS', 'MAND', 'ARAB', 'GP', 'GC', 'IPA', 'ENG');
+		if (in_array($code, $with_performance_codes, true) ||
+			strpos($text, 'SCIENCE') !== false ||
+			strpos($text, 'PHYSICS') !== false ||
+			strpos($text, 'CHEMISTRY') !== false ||
+			strpos($text, 'BIOLOGY') !== false ||
+			strpos($text, 'ILMU PENGETAHUAN ALAM') !== false ||
+			strpos($text, 'COMPUTER SCIENCE') !== false ||
+			strpos($text, 'INFORMATIKA') !== false ||
+			strpos($text, 'MANDARIN') !== false ||
+			strpos($text, 'ARABIC') !== false ||
+			strpos($text, 'BAHASA ARAB') !== false ||
+			strpos($text, 'ENGLISH') !== false ||
+			strpos($text, 'BAHASA INGGRIS') !== false ||
+			strpos($text, 'GLOBAL PERSPECTIVE') !== false ||
+			strpos($text, 'GLOBAL CITIZENSHIP') !== false) {
+			return 'with_performance';
+		}
+
+		return 'without_performance';
+	};
+
+	if ($categories === null) {
+		$categories = array('by_id' => array(), 'by_code' => array(), 'by_name' => array());
+		if (function_exists('get_instance')) {
+			$CI = &get_instance();
+			if (!empty($CI->db)) {
+				$rows = $CI->db->query("SELECT id, kd_singkat, nama, kategori_penilaian FROM m_mapel")->result_array();
+				foreach ($rows as $row) {
+					$stored_category = strtolower(trim((string)$row['kategori_penilaian']));
+					$valid_categories = array('without_written', 'with_performance', 'without_performance');
+					$category = in_array($stored_category, $valid_categories, true)
+						? $stored_category
+						: $classify($row['kd_singkat'], $row['nama']);
+					$categories['by_id'][(int)$row['id']] = $category;
+					$categories['by_code'][strtoupper(trim($row['kd_singkat']))] = $category;
+					$categories['by_name'][strtoupper(trim($row['nama']))] = $category;
+				}
+			}
+		}
+	}
+
+	$value = trim((string)$id_or_code_or_name);
+	if (in_array(strtolower($value), array('without_written', 'with_performance', 'without_performance'), true)) {
+		return strtolower($value);
+	}
+
+	if (is_numeric($value) && isset($categories['by_id'][(int)$value])) {
+		return $categories['by_id'][(int)$value];
+	}
+
+	$key = strtoupper($value);
+	if (isset($categories['by_code'][$key])) {
+		return $categories['by_code'][$key];
+	}
+	if (isset($categories['by_name'][$key])) {
+		return $categories['by_name'][$key];
+	}
+
+	return $classify('', $value);
+}
+
+function get_bobot_penilaian_sop($kategori, $semester = 1, $is_pts = false, $tingkat = null)
+{
+	if ($tingkat !== null && in_array((string)$tingkat, array('1', '2'), true)) {
+		return array('ut' => 60, 'buzz' => 10, 'mid' => 0, 'final' => 0, 'perf' => 30);
+	}
+
+	$is_secondary = ($tingkat !== null && (int)$tingkat >= 7);
+	if ($is_secondary) {
+		if ((int)$semester === 2) {
+			if ($kategori === 'without_written') {
+				return array('ut' => 35, 'buzz' => 10, 'mid' => 0, 'final' => 0, 'perf' => 55);
+			}
+			if ($kategori === 'with_performance') {
+				return array('ut' => 20, 'buzz' => 10, 'mid' => 20, 'final' => 40, 'perf' => 10);
+			}
+			return array('ut' => 30, 'buzz' => 10, 'mid' => 20, 'final' => 40, 'perf' => 0);
+		}
+
+		if ($kategori === 'without_written') {
+			return array('ut' => 35, 'buzz' => 10, 'mid' => 0, 'final' => 0, 'perf' => 55);
+		}
+		if ($kategori === 'with_performance') {
+			return array('ut' => 25, 'buzz' => 10, 'mid' => 25, 'final' => 30, 'perf' => 10);
+		}
+		return array('ut' => 30, 'buzz' => 10, 'mid' => 25, 'final' => 35, 'perf' => 0);
+	}
+
+	if ((int)$semester === 2) {
+		if ($kategori === 'without_written') {
+			return array('ut' => 35, 'buzz' => 10, 'mid' => 0, 'final' => 0, 'perf' => 55);
+		}
+		if ($kategori === 'with_performance') {
+			return array('ut' => 25, 'buzz' => 10, 'mid' => 20, 'final' => 35, 'perf' => 10);
+		}
+		return array('ut' => 35, 'buzz' => 10, 'mid' => 20, 'final' => 35, 'perf' => 0);
+	}
+
+	if ($kategori === 'without_written') {
+		return array('ut' => 35, 'buzz' => 10, 'mid' => 0, 'final' => 0, 'perf' => 55);
+	}
+	if ($kategori === 'with_performance') {
+		return array('ut' => 30, 'buzz' => 10, 'mid' => 20, 'final' => 30, 'perf' => 10);
+	}
+	return array('ut' => 35, 'buzz' => 10, 'mid' => 20, 'final' => 35, 'perf' => 0);
+}
+
+function hitung_nilai_sop($components, $id_or_code_or_name, $semester = 1, $is_pts = false, $tingkat = null, $return_details = false)
+{
+	$raw_h = isset($components['h']) ? $components['h'] : (isset($components['ut']) ? $components['ut'] : 0);
+	$val_h = 0;
+	if (is_array($raw_h)) {
+		$sum_h = 0;
+		$count_h = 0;
+		foreach ($raw_h as $item) {
+			if (is_numeric($item)) {
+				$sum_h += (float)$item;
+				$count_h++;
+			} elseif (is_string($item) && strpos($item, '//') !== false) {
+				$parts = explode('//', $item);
+				if (is_numeric($parts[0])) {
+					$sum_h += (float)$parts[0];
+					$count_h++;
+				}
+			}
+		}
+		$val_h = $count_h > 0 ? $sum_h / $count_h : 0;
+	} elseif (is_numeric($raw_h)) {
+		$val_h = (float)$raw_h;
+	}
+
+	$val_b = (float)(isset($components['b']) ? $components['b'] : (isset($components['buzz']) ? $components['buzz'] : 0));
+	$val_t = (float)(isset($components['t']) ? $components['t'] : (isset($components['mid']) ? $components['mid'] : 0));
+	$val_a = (float)(isset($components['a']) ? $components['a'] : (isset($components['final']) ? $components['final'] : 0));
+	$val_p = (float)(isset($components['p']) ? $components['p'] : (isset($components['perf']) ? $components['perf'] : 0));
+	$has_buzz = isset($components['has_buzz']) ? (bool)$components['has_buzz'] : ($val_b > 0);
+	$kategori = get_kategori_penilaian_mapel($id_or_code_or_name);
+	$is_grade_1_2 = ($tingkat !== null && in_array((string)$tingkat, array('1', '2'), true));
+
+	if ($is_grade_1_2) {
+		if ($val_p <= 0) {
+			$val_p = $val_t > 0 ? $val_t : ($val_a > 0 ? $val_a : 0);
+		}
+		$val_t = 0;
+		$val_a = 0;
+	} elseif ($kategori === 'without_written') {
+		if ($val_p <= 0) {
+			if ($is_pts && $val_t > 0) {
+				$val_p = $val_t;
+			} elseif (!$is_pts) {
+				$val_p = $val_a > 0 ? $val_a : $val_t;
+			}
+		}
+		$val_t = 0;
+		$val_a = 0;
+	}
+
+	$bobot = get_bobot_penilaian_sop($kategori, $semester, $is_pts, $tingkat);
+	$val_thesis = (float)(isset($components['thesis']) ? $components['thesis'] : 0);
+	if ((string)$tingkat === '12' && (int)$semester === 2 && !$is_pts && $val_thesis > 0) {
+		$internal_weight = $bobot['ut'] + $bobot['mid'];
+		$internal_score = ($bobot['ut'] * $val_h) + ($bobot['mid'] * $val_t);
+		if ($bobot['perf'] > 0 && ($kategori === 'without_written' || $val_p > 0)) {
+			$internal_weight += $bobot['perf'];
+			$internal_score += $bobot['perf'] * $val_p;
+		}
+		if ($has_buzz || $val_b > 0) {
+			$internal_weight += $bobot['buzz'];
+			$internal_score += $bobot['buzz'] * $val_b;
+		}
+		$internal = $internal_weight > 0 ? ($internal_score / $internal_weight) * 40 : 0;
+		$raw = ($internal + (20 * $val_thesis) + (40 * $val_a)) / 100;
+		$nilai_akhir = (int)round($raw);
+		if (!$return_details) {
+			return $nilai_akhir;
+		}
+
+		$kategori_labels = array(
+			'without_written' => 'Without Written Exam (Alternative Assessment)',
+			'with_performance' => 'With Performance Assessment',
+			'without_performance' => 'Without Performance Assessment'
+		);
+		return array(
+			'nilai_akhir' => $nilai_akhir,
+			'kategori' => $kategori,
+			'kategori_label' => $kategori_labels[$kategori],
+			'bobot' => array('internal' => 40, 'thesis' => 20, 'final' => 40),
+			'total_bobot_aktif' => 100,
+			'komponen' => array('ut' => round($val_h, 1), 'buzz' => round($val_b, 1), 'mid' => round($val_t, 1), 'final' => round($val_a, 1), 'perf' => round($val_p, 1), 'thesis' => round($val_thesis, 1)),
+			'raw' => $raw,
+			'langkah_hitung' => '(Internal 40% x ' . round($internal_weight > 0 ? $internal_score / $internal_weight : 0, 1) . ') + (Thesis 20% x ' . round($val_thesis, 1) . ') + (Final/Mock 40% x ' . round($val_a, 1) . ') = ' . round($raw, 2) . ' ~= ' . $nilai_akhir,
+			'rumus_dasar' => 'Internal: 40% | Thesis: 20% | Mock 3 / Final: 40%',
+			'penjelasan' => 'Cambridge Grade 12 SOP Rule: Internal Assessment 40%, Thesis 20%, Mock 3 / Final Exam 40%.'
+		);
+	}
+
+	$weighted_score = 0;
+	$total_weight = 0;
+	if ($is_pts) {
+		if ($bobot['ut'] > 0 && $val_h > 0) {
+			$weighted_score += $bobot['ut'] * $val_h;
+			$total_weight += $bobot['ut'];
+		}
+		if ($bobot['mid'] > 0 && $val_t > 0) {
+			$weighted_score += $bobot['mid'] * $val_t;
+			$total_weight += $bobot['mid'];
+		}
+		if ($bobot['buzz'] > 0 && $val_b > 0) {
+			$weighted_score += $bobot['buzz'] * $val_b;
+			$total_weight += $bobot['buzz'];
+		}
+		if ($bobot['perf'] > 0 && $val_p > 0) {
+			$weighted_score += $bobot['perf'] * $val_p;
+			$total_weight += $bobot['perf'];
+		}
+	} else {
+		if ($bobot['ut'] > 0) {
+			$weighted_score += $bobot['ut'] * $val_h;
+			$total_weight += $bobot['ut'];
+		}
+		if ($bobot['mid'] > 0) {
+			$weighted_score += $bobot['mid'] * $val_t;
+			$total_weight += $bobot['mid'];
+		}
+		if ($bobot['final'] > 0) {
+			$weighted_score += $bobot['final'] * $val_a;
+			$total_weight += $bobot['final'];
+		}
+		if ($bobot['perf'] > 0 && ($kategori === 'without_written' || $val_p > 0)) {
+			$weighted_score += $bobot['perf'] * $val_p;
+			$total_weight += $bobot['perf'];
+		}
+		if ($bobot['buzz'] > 0 && ($has_buzz || $val_b > 0)) {
+			$weighted_score += $bobot['buzz'] * $val_b;
+			$total_weight += $bobot['buzz'];
+		}
+	}
+
+	if ($total_weight <= 0) {
+		$total_weight = 100;
+	}
+	$raw = $weighted_score / $total_weight;
+	$nilai_akhir = (int)round($raw);
+	if (!$return_details) {
+		return $nilai_akhir;
+	}
+
+	$kategori_labels = array(
+		'without_written' => 'Without Written Exam (Alternative Assessment)',
+		'with_performance' => 'With Performance Assessment',
+		'without_performance' => 'Without Performance Assessment'
+	);
+	$terms = array();
+	if ($is_pts) {
+		if ($bobot['ut'] > 0 && $val_h > 0) $terms[] = '(' . $bobot['ut'] . '% x ' . round($val_h, 1) . ')';
+		if ($bobot['buzz'] > 0 && $val_b > 0) $terms[] = '(' . $bobot['buzz'] . '% x ' . round($val_b, 1) . ')';
+		if ($bobot['mid'] > 0 && $val_t > 0) $terms[] = '(' . $bobot['mid'] . '% x ' . round($val_t, 1) . ')';
+		if ($bobot['perf'] > 0 && $val_p > 0) $terms[] = '(' . $bobot['perf'] . '% x ' . round($val_p, 1) . ')';
+	} else {
+		if ($bobot['ut'] > 0) $terms[] = '(' . $bobot['ut'] . '% x ' . round($val_h, 1) . ')';
+		if ($bobot['buzz'] > 0 && ($has_buzz || $val_b > 0)) $terms[] = '(' . $bobot['buzz'] . '% x ' . round($val_b, 1) . ')';
+		if ($bobot['mid'] > 0) $terms[] = '(' . $bobot['mid'] . '% x ' . round($val_t, 1) . ')';
+		if ($bobot['final'] > 0) $terms[] = '(' . $bobot['final'] . '% x ' . round($val_a, 1) . ')';
+		if ($bobot['perf'] > 0 && ($kategori === 'without_written' || $is_grade_1_2 || $val_p > 0)) $terms[] = '(' . $bobot['perf'] . '% x ' . round($val_p, 1) . ')';
+	}
+
+	if (empty($terms)) {
+		$step = 'No assessment scores recorded (Score: 0)';
+		$explanation = 'Assessment components not yet entered.';
+	} else {
+		$step = implode(' + ', $terms) . ' = ' . round($raw, 2) . ' ~= ' . $nilai_akhir;
+		$explanation = 'Standard calculation with active weight total ' . $total_weight . '%.';
+		if ($total_weight < 100) {
+			$step = '[ ' . implode(' + ', $terms) . ' ] / ' . $total_weight . '% = ' . round($raw, 2) . ' ~= ' . $nilai_akhir;
+			$explanation = $is_pts
+				? 'Mid-Term (PTS) dynamic weighting: Active divisor weight is ' . $total_weight . '%.'
+				: 'Dynamic weighting: Active weight total is ' . $total_weight . '%.';
+		}
+		if ($is_grade_1_2) {
+			$label = 'Grade 1 & 2 No Mid/Final Exam (UT 60%, Performance 30%, Buzz 10%)';
+		} else {
+			$label = $kategori_labels[$kategori];
+		}
+	}
+
+	$base_weights = array();
+	foreach (array('ut' => 'UT', 'buzz' => 'Buzz', 'mid' => 'Mid', 'final' => 'Final', 'perf' => 'Performance') as $key => $name) {
+		if ($bobot[$key] > 0) {
+			$base_weights[] = $name . ': ' . $bobot[$key] . '%';
+		}
+	}
+
+	return array(
+		'nilai_akhir' => $nilai_akhir,
+		'kategori' => $kategori,
+		'kategori_label' => isset($label) ? $label : $kategori_labels[$kategori],
+		'bobot' => $bobot,
+		'total_bobot_aktif' => $total_weight,
+		'komponen' => array('ut' => round($val_h, 1), 'buzz' => round($val_b, 1), 'mid' => round($val_t, 1), 'final' => round($val_a, 1), 'perf' => round($val_p, 1)),
+		'raw' => $raw,
+		'langkah_hitung' => $step,
+		'rumus_dasar' => implode(' | ', $base_weights),
+		'penjelasan' => $explanation
+	);
+}
+
+function hitung_nilai_keterampilan_sop($components, $id_or_code_or_name, $return_details = false)
+{
+	$raw_h = isset($components['h']) ? $components['h'] : 0;
+	$val_h = 0;
+	if (is_array($raw_h)) {
+		$sum_h = 0;
+		$count_h = 0;
+		foreach ($raw_h as $item) {
+			if (is_numeric($item)) {
+				$sum_h += (float)$item;
+				$count_h++;
+			} elseif (is_string($item) && strpos($item, '//') !== false) {
+				$parts = explode('//', $item);
+				if (is_numeric($parts[0])) {
+					$sum_h += (float)$parts[0];
+					$count_h++;
+				}
+			}
+		}
+		$val_h = $count_h > 0 ? $sum_h / $count_h : 0;
+	} elseif (is_numeric($raw_h)) {
+		$val_h = (float)$raw_h;
+	}
+
+	$val_p = (float)(isset($components['p']) ? $components['p'] : (isset($components['perf']) ? $components['perf'] : 0));
+	$kategori = get_kategori_penilaian_mapel($id_or_code_or_name);
+	if ($kategori === 'with_performance' && $val_p > 0 && $val_h > 0) {
+		$nilai_akhir = (int)round((0.5 * $val_h) + (0.5 * $val_p));
+		$step = '(50% x ' . round($val_h, 1) . ') + (50% x ' . round($val_p, 1) . ') = ' . $nilai_akhir;
+	} elseif ($val_p > 0 && ($kategori === 'with_performance' || $val_h <= 0)) {
+		$nilai_akhir = (int)round($val_p);
+		$step = '100% Practical / Alternative (' . round($val_p, 1) . ') = ' . $nilai_akhir;
+	} else {
+		$nilai_akhir = (int)round($val_h);
+		$step = '100% Skills Assessment (KD) (' . round($val_h, 1) . ') = ' . $nilai_akhir;
+	}
+
+	if (!$return_details) {
+		return $nilai_akhir;
+	}
+	return array(
+		'nilai_akhir' => $nilai_akhir,
+		'kategori' => $kategori,
+		'komponen' => array('kd' => round($val_h, 1), 'perf' => round($val_p, 1)),
+		'langkah_hitung' => $step
+	);
+}
+
+function get_live_ledger_scores_siswa($id_siswa, $tasm, $is_pts = false, $tingkat = null, $return_details = false)
+{
+	$semester = (int)substr((string)$tasm, 4, 1);
+	if ($semester === 0) {
+		$semester = 1;
+	}
+
+	$nilai_utama = get_nilai_utama('t_nilai', $id_siswa, $tasm, $is_pts);
+	$nilai_uts = get_nilai_uts('t_nilai', $id_siswa, $tasm, $is_pts);
+	$mapel_comp_p = array();
+	foreach ($nilai_utama as $row) {
+		$mid = (int)$row['idmapel'];
+		if ($mid <= 0) continue;
+		if (!isset($mapel_comp_p[$mid])) {
+			$mapel_comp_p[$mid] = array('h' => array(), 't' => 0, 'a' => 0, 'p' => 0, 'b' => 0);
+		}
+		if ($row['jenis'] === 'h') {
+			$mapel_comp_p[$mid]['h'][] = $row['nilai'];
+		}
+	}
+	foreach ($nilai_uts as $row) {
+		$mid = (int)$row['idmapel'];
+		if ($mid <= 0) continue;
+		if (!isset($mapel_comp_p[$mid])) {
+			$mapel_comp_p[$mid] = array('h' => array(), 't' => 0, 'a' => 0, 'p' => 0, 'b' => 0);
+		}
+		if (in_array($row['jenis'], array('t', 'a', 'p', 'b'), true)) {
+			$mapel_comp_p[$mid][$row['jenis']] = (float)$row['nilai'];
+		}
+	}
+
+	$scores_p = array();
+	$details_p = array();
+	foreach ($mapel_comp_p as $mid => $components) {
+		$detail = hitung_nilai_sop($components, $mid, $semester, $is_pts, $tingkat, $return_details);
+		$scores_p[$mid] = $return_details ? $detail['nilai_akhir'] : $detail;
+		if ($return_details) {
+			$details_p[$mid] = $detail;
+		}
+	}
+
+	$nilai_utama_k = get_nilai_utama('t_nilai_ket', $id_siswa, $tasm, $is_pts);
+	$nilai_uts_k = get_nilai_uts('t_nilai_ket', $id_siswa, $tasm, $is_pts);
+	$mapel_comp_k = array();
+	foreach ($nilai_utama_k as $row) {
+		$mid = (int)$row['idmapel'];
+		if ($mid <= 0) continue;
+		if (!isset($mapel_comp_k[$mid])) {
+			$mapel_comp_k[$mid] = array('h' => array(), 'p' => 0);
+		}
+		if ($row['jenis'] === 'h') {
+			$mapel_comp_k[$mid]['h'][] = $row['nilai'];
+		}
+	}
+	foreach ($nilai_uts_k as $row) {
+		$mid = (int)$row['idmapel'];
+		if ($mid <= 0) continue;
+		if (!isset($mapel_comp_k[$mid])) {
+			$mapel_comp_k[$mid] = array('h' => array(), 'p' => 0);
+		}
+		if ($row['jenis'] === 'p') {
+			$mapel_comp_k[$mid]['p'] = (float)$row['nilai'];
+		}
+	}
+	foreach ($mapel_comp_k as $mid => &$components) {
+		if (empty($components['p']) && !empty($mapel_comp_p[$mid]['p'])) {
+			$components['p'] = (float)$mapel_comp_p[$mid]['p'];
+		}
+	}
+	unset($components);
+
+	$scores_k = array();
+	$details_k = array();
+	foreach ($mapel_comp_k as $mid => $components) {
+		$detail = hitung_nilai_keterampilan_sop($components, $mid, $return_details);
+		$scores_k[$mid] = $return_details ? $detail['nilai_akhir'] : $detail;
+		if ($return_details) {
+			$details_k[$mid] = $detail;
+		}
+	}
+
+	if ($return_details) {
+		return array('np' => $scores_p, 'nk' => $scores_k, 'details_p' => $details_p, 'details_k' => $details_k);
+	}
+	return array('np' => $scores_p, 'nk' => $scores_k);
 }

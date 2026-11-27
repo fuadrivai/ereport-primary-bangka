@@ -910,15 +910,17 @@ public function import_from_agilix($bawa){
 
         $id_siswa = $siswa->id;
 
-        $midtermScore = 0;
-        $finalScore = 0;
+        $midtermScore = null;
+        $finalScore = null;
+        $alternativeScore = null;
+        $practicalScore = null;
 
         // Ambil Nilai per Item
         if (isset($enrollment->grades->items->item)) {
             foreach ($enrollment->grades->items->item as $item) {
                 $gradable = (string)$item['gradable'];
                 $achieved = (string)$item['achieved'];
-                $title    = (string)$item['title'];
+                $title    = trim((string)$item['title']);
                 $parentId = (string)$item['parentid'];
 
                 if ($knowledgeFolderId && $parentId !== $knowledgeFolderId) {
@@ -930,8 +932,12 @@ public function import_from_agilix($bawa){
 
                     if ($title === 'Midterm Score') {
                         $midtermScore = $nilai;
-                    } elseif ($title === 'Final Score') {
+                    } elseif ($title === 'Final Score' || $title === 'End-of-Year Score') {
                         $finalScore = $nilai;
+                    } elseif ($title === 'Alternative Assessment') {
+                        $alternativeScore = $nilai;
+                    } elseif ($title === 'Practical Test Score' || $title === 'Practical Test' || $title === 'Performance Task') {
+                        $practicalScore = $nilai;
                     } elseif ($achieved !== '') {
                         // Cari KD berdasarkan Title di tabel t_mapel_kd
                         $kd = $this->db->query("SELECT id FROM t_mapel_kd WHERE no_kd = ? AND id_mapel = ? AND tingkat = ? AND semester = ? AND jenis = 'P'", 
@@ -947,11 +953,28 @@ public function import_from_agilix($bawa){
             }
         }
 
-        // Simpan Midterm & Final (0 jika tidak ada)
-        $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
-                          VALUES (?, ?, 't', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $midtermScore]);
-        $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
-                          VALUES (?, ?, 'a', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $finalScore]);
+        $kategoriMapel = function_exists('get_kategori_penilaian_mapel') ? get_kategori_penilaian_mapel($id_mapel) : 'without_performance';
+        if ($kategoriMapel === 'without_written') {
+            if ($alternativeScore !== null) {
+                $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                                  VALUES (?, ?, 'p', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $alternativeScore]);
+            }
+            if ($midtermScore !== null) {
+                $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                                  VALUES (?, ?, 't', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $midtermScore]);
+            }
+        } else {
+            $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                              VALUES (?, ?, 't', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $midtermScore === null ? 0 : $midtermScore]);
+            $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                              VALUES (?, ?, 'a', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $finalScore === null ? 0 : $finalScore]);
+            if ($practicalScore !== null) {
+                $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                                  VALUES (?, ?, 'p', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $practicalScore]);
+                $this->db->query("REPLACE INTO t_nilai_ket (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                                  VALUES (?, ?, 'p', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $practicalScore]);
+            }
+        }
     }
 
     echo json_encode([
@@ -1049,9 +1072,17 @@ private function save_score_from_xml($title, $mp, $siswa_id, $nilai) {
     if ($title === 'Midterm Score') {
         $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai) 
                           VALUES (?, ?, 't', ?, ?, ?)", [$mp['id'], $tasm, $mp['id_mapel'], $siswa_id, $nilai]);
-    } elseif ($title === 'Final Score') {
+    } elseif ($title === 'Final Score' || $title === 'End-of-Year Score') {
         $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai) 
                           VALUES (?, ?, 'a', ?, ?, ?)", [$mp['id'], $tasm, $mp['id_mapel'], $siswa_id, $nilai]);
+    } elseif ($title === 'Alternative Assessment') {
+        $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                          VALUES (?, ?, 'p', ?, ?, ?)", [$mp['id'], $tasm, $mp['id_mapel'], $siswa_id, $nilai]);
+    } elseif ($title === 'Practical Test Score' || $title === 'Practical Test' || $title === 'Performance Task') {
+        $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                          VALUES (?, ?, 'p', ?, ?, ?)", [$mp['id'], $tasm, $mp['id_mapel'], $siswa_id, $nilai]);
+        $this->db->query("REPLACE INTO t_nilai_ket (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+                          VALUES (?, ?, 'p', ?, ?, ?)", [$mp['id'], $tasm, $mp['id_mapel'], $siswa_id, $nilai]);
     } else {
         // Cari ID KD berdasarkan title yang didapat dari XML
         $kd = $this->db->query("SELECT id FROM t_mapel_kd 
@@ -1183,12 +1214,6 @@ public function create_gradebook_items_in_buzz($bawa) {
         $knowledgeFolderId = 'knowledge-' . time();
         $this->buzz_put_xml($token, "<requests><item entityid='{$courseId}' itemid='{$knowledgeFolderId}'><data><title>{$titles}</title><parent>{$topicId}</parent><sequence>a</sequence></data></item></requests>");
         
-        // Buat Midterm & Final otomatis
-        $fixed = ['Midterm Score', 'Final Score'];
-        foreach ($fixed as $f) {
-            $fId = strtolower(str_replace(' ', '-', $f)) . '-' . time();
-            $this->create_assignment_xml($token, $courseId, $fId, $f, $knowledgeFolderId);
-        }
     }
 
     // 7. Sinkronisasi KD (Cari yang belum ada)
@@ -1206,6 +1231,32 @@ public function create_gradebook_items_in_buzz($bawa) {
         if (isset($item->item)) {
             foreach ($item->item as $child) { $stack[] = $child; }
         }
+    }
+
+    $kategori = function_exists('get_kategori_penilaian_mapel') ? get_kategori_penilaian_mapel($id_mapel) : 'without_performance';
+    if ($kategori === 'without_written') {
+        $fixed = ['Alternative Assessment'];
+    } elseif ($kategori === 'with_performance') {
+        $finalScoreTitle = ($this->d['semester'] == 2) ? 'End-of-Year Score' : 'Final Score';
+        if ($this->d['semester'] == 2 && in_array('Final Score', $existingTitles)) {
+            $finalScoreTitle = 'Final Score';
+        }
+        $fixed = ['Midterm Score', $finalScoreTitle, 'Practical Test Score'];
+    } else {
+        $finalScoreTitle = ($this->d['semester'] == 2) ? 'End-of-Year Score' : 'Final Score';
+        if ($this->d['semester'] == 2 && in_array('Final Score', $existingTitles)) {
+            $finalScoreTitle = 'Final Score';
+        }
+        $fixed = ['Midterm Score', $finalScoreTitle];
+    }
+
+    foreach ($fixed as $title) {
+        if (in_array($title, $existingTitles)) {
+            continue;
+        }
+        $itemId = strtolower(str_replace(' ', '-', $title)) . '-' . time();
+        $this->create_assignment_xml($token, $courseId, $itemId, $title, $knowledgeFolderId);
+        $existingTitles[] = $title;
     }
 
     foreach ($kd_list as $kd) {
@@ -1428,6 +1479,10 @@ private function buzz_put_xml($token, $xml) {
                     //$queri[] = "add";
                 }
             }
+            if ($p['jenis'] == 'p') {
+                $this->db->query("REPLACE INTO t_nilai_ket (tasm, jenis, id_guru_mapel, id_mapel_kd, id_siswa, nilai)
+                                  VALUES (?, 'p', ?, ?, ?, ?)", [$this->d['tasm'], $p['id_guru_mapel'], $p['id_mapel_kd'], $p['id_siswa'][$i], $s]);
+            }
             $i++;
         }
         
@@ -1463,6 +1518,9 @@ private function buzz_put_xml($token, $xml) {
 
         $this->session->set_userdata("id_guru_mapel", $id);
 
+        $this->d['kategori_sop'] = function_exists('get_kategori_penilaian_mapel')
+            ? get_kategori_penilaian_mapel($this->d['detil_mp']['id_mapel'])
+            : 'without_performance';
 
     	$this->d['p'] = "list";
         $this->load->view("template_utama", $this->d);

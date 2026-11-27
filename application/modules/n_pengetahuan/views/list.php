@@ -23,7 +23,7 @@
                 <a href="<?php echo base_url(); ?>view_mapel" class="btn btn-info">
                     <i class="fa fa-arrow-left"></i> Back to Subject List
                 </a>
-                <?php if($detil_mp['kd_singkat']=="BTQ") {?>
+                <?php if ($detil_mp['kd_singkat'] == "BTQ") { ?>
                     <!--<a href="<?php echo base_url(); ?>n_pengetahuan/cetak/<?php echo $detil_mp['id_mapel']."-".$detil_mp['id_kelas']; ?>" class="btn btn-warning" target="_blank">-->
                     <!--    <i class="fa fa-print"></i> Print Report-->
                     <!--</a>-->
@@ -34,21 +34,31 @@
                     <a href="<?php echo base_url(); ?>n_pengetahuan/upload/<?php echo $detil_mp['id_mapel']."-".$detil_mp['id_kelas']; ?>" class="btn btn-success">
                         <i class="fa fa-upload"></i> Upload Excel File
                     </a>
-                <?} else{?>
+                <?php } else { ?>
                     <a href="#" class="btn btn-success" onclick="return importFromBuzz();">
                         <i class="fa fa-cloud-download"></i> Import Scores from Buzz LMS
                     </a>
                     <a href="#" class="btn btn-success" onclick="return create_gradebook_items_in_buzz();">
                         <i class="fa fa-refresh"></i> Synchronize Topics to Buzz LMS
                     </a>
-                <?}?>
+                <?php } ?>
             </div>
         </div>
     </div>
     <div class="col-md-12">
         <div class="card">
             <div class="header">
-                <h5 class="title"><?php if ($detil_mp['tingkat'] == '1' || $detil_mp['tingkat'] == '4'){ ?>Sumatif <?php }else{ ?> Knowledge <?php } ?> Score &raquo; <?php echo $detil_mp['nmmapel']." - ".$detil_mp['nmkelas']; ?></h5>
+                <?php
+                $kategori_mp = $kategori_sop ?? 'without_performance';
+                if ($kategori_mp === 'without_written') {
+                    $header_title = "Unit Tests & Alternative Assessment";
+                } elseif ($kategori_mp === 'with_performance') {
+                    $header_title = "Written Assessment (Summative)";
+                } else {
+                    $header_title = ($detil_mp['tingkat'] == '1' || $detil_mp['tingkat'] == '4') ? "Summative Assessment" : "Knowledge / Summative";
+                }
+                ?>
+                <h5 class="title"><?php echo $header_title; ?> &raquo; <?php echo $detil_mp['nmmapel']." - ".$detil_mp['nmkelas']; ?></h5>
             </div>
             <div class="content">
                 <p>
@@ -57,8 +67,22 @@
                 <ul class="list-group" id="list_kd">
                     <div id="list_kd_2" style="margin-bottom: 10px"></div>
                     
-                    <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'t');"><a href="#"><i class="fa fa-chevron-right"></i>  Midterm Score</a></li>
-                    <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'a');"><a href="#"><i class="fa fa-chevron-right"></i>  Final Score</a></li>
+                    <?php if ($kategori_mp === 'without_written'): ?>
+                        <li class="list-group-item list-group-item-warning" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'p');">
+                            <a href="#" style="color: #8a6d3b; font-weight: bold;"><i class="fa fa-star"></i> Alternative Assessment</a>
+                        </li>
+                    <?php elseif ($kategori_mp === 'with_performance'): ?>
+                        <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'t');"><a href="#"><i class="fa fa-chevron-right"></i> Midterm Score</a></li>
+                        <?php $finalTitle = ($semester == 2) ? "End-of-Year Score" : "Final Score"; ?>
+                        <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'a');"><a href="#"><i class="fa fa-chevron-right"></i> <?php echo $finalTitle; ?></a></li>
+                        <li class="list-group-item list-group-item-info" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'p');">
+                            <a href="#" style="color: #31708f; font-weight: bold;"><i class="fa fa-flask"></i> Practical Test Score</a>
+                        </li>
+                    <?php else: ?>
+                        <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'t');"><a href="#"><i class="fa fa-chevron-right"></i> Midterm Score</a></li>
+                        <?php $finalTitle = ($semester == 2) ? "End-of-Year Score" : "Final Score"; ?>
+                        <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'a');"><a href="#"><i class="fa fa-chevron-right"></i> <?php echo $finalTitle; ?></a></li>
+                    <?php endif; ?>
                     <li class="list-group-item" onclick="return view_kd(<?php echo $detil_mp['id_mapel'].", ".$detil_mp['id_kelas']; ?>,'c');"><a href="#"><i class="fa fa-chevron-right"></i>  CATATAN DIKNAS</a></li>
                 </ul>
             </div>
