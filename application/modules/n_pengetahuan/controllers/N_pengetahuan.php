@@ -792,10 +792,12 @@ public function import_from_agilix($bawa){
         $q_siswa_kelas = $this->db->query("SELECT a.id_siswa, b.nama nmsiswa FROM t_kelas_siswa a LEFT JOIN m_siswa b ON a.id_siswa = b.id WHERE a.id_kelas = '".$pc_bawa[1]."' AND a.ta = '".$this->d['tahun']."'")->result_array();
 
         $d_kd = array();
+        $kd_codes = array();
         if (!empty($q_kd_guru_ini)) {
             foreach ($q_kd_guru_ini as $v) {
                 $idx = $v['id'];
                 $d_kd[$idx]['kode'] = $v['no_kd'];
+                $kd_codes[] = trim((string)$v['no_kd']);
             }
         }
         if (!empty($d_kd)) {
@@ -919,15 +921,18 @@ public function import_from_agilix($bawa){
         if (isset($enrollment->grades->items->item)) {
             foreach ($enrollment->grades->items->item as $item) {
                 $gradable = (string)$item['gradable'];
+                $possible = (string)$item['possible'];
                 $achieved = (string)$item['achieved'];
                 $title    = trim((string)$item['title']);
                 $parentId = (string)$item['parentid'];
+                $itemId   = (string)$item['itemid'];
 
-                if ($knowledgeFolderId && $parentId !== $knowledgeFolderId) {
+                if ($gradable !== 'true') {
                     continue;
                 }
 
-                if ($gradable === 'true') {
+                $isKnowledgeItem = ($knowledgeFolderId && $parentId === $knowledgeFolderId);
+                if ($isKnowledgeItem) {
                     $nilai = ($achieved !== '') ? floatval($achieved) : 0;
 
                     if ($title === 'Midterm Score') {
@@ -949,6 +954,24 @@ public function import_from_agilix($bawa){
                         }
                     }
                     $successCount++;
+                } else {
+                    $systemTitles = [
+                        'Midterm Score', 'Final Score', 'End-of-Year Score',
+                        'Alternative Assessment', 'Practical Test Score', 'Practical Test', 'Performance Task'
+                    ];
+
+                    if ($achieved !== '' && !in_array($title, $systemTitles, true) && !in_array($title, $kd_codes, true)) {
+                        $this->save_buzz_assignment_score(
+                            $id_guru_mapel,
+                            $id_siswa,
+                            $tasm,
+                            $itemId,
+                            $title,
+                            $achieved,
+                            $possible
+                        );
+                        $successCount++;
+                    }
                 }
             }
         }
@@ -975,6 +998,8 @@ public function import_from_agilix($bawa){
                                   VALUES (?, ?, 'p', ?, ?, ?)", [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $practicalScore]);
             }
         }
+
+        $this->sync_buzz_assignment_average($id_guru_mapel, $id_mapel, $id_siswa, $tasm);
     }
 
     echo json_encode([
@@ -1043,20 +1068,22 @@ public function webhook_grade_created()
 
     if ($siswa && $detil_mp) {
         $itemTitle = '';
+        $possible  = '';
         
         // Cari Title di dalam list items (XML structure)
         // Biasanya: <grades><items><item itemid="..." title="..." />
         if (isset($enrollment->grades->items->item)) {
             foreach ($enrollment->grades->items->item as $it) {
                 if ((string)$it['itemid'] === $itemId) {
-                    $itemTitle = (string)$it['title'];
+                    $itemTitle = trim((string)$it['title']);
+                    $possible  = (string)$it['possible'];
                     break;
                 }
             }
         }
 
         // Simpan Nilai
-        $this->save_score_from_xml($itemTitle, $detil_mp, $siswa->id, $achieved);
+        $this->save_score_from_xml($itemTitle, $detil_mp, $siswa->id, $achieved, $itemId, $possible);
     }
 
     echo json_encode(['status' => 'success']);
@@ -1065,7 +1092,7 @@ public function webhook_grade_created()
 /**
  * Fungsi simpan nilai yang mendukung logika XML
  */
-private function save_score_from_xml($title, $mp, $siswa_id, $nilai) {
+private function save_score_from_xml($title, $mp, $siswa_id, $nilai, $itemId = null, $possible = null) {
     $tasm = $this->d['tasm'];
     $sem  = $this->d['semester'];
 
@@ -1091,7 +1118,52 @@ private function save_score_from_xml($title, $mp, $siswa_id, $nilai) {
         if ($kd) {
             $this->db->query("REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai) 
                               VALUES (?, ?, 'h', ?, ?, ?)", [$mp['id'], $tasm, $kd->id, $siswa_id, $nilai]);
+        } else {
+            $this->save_buzz_assignment_score(
+                $mp['id'],
+                $siswa_id,
+                $tasm,
+                $itemId,
+                $title,
+                $nilai,
+                $possible
+            );
+            $this->sync_buzz_assignment_average($mp['id'], $mp['id_mapel'], $siswa_id, $tasm);
         }
+    }
+}
+
+private function save_buzz_assignment_score($id_guru_mapel, $id_siswa, $tasm, $item_id, $item_title, $achieved, $possible)
+{
+    if ($item_id === null || trim((string)$item_id) === '' || trim((string)$item_title) === '') {
+        return;
+    }
+
+    $possible_value = (is_numeric($possible) && (float)$possible > 0) ? (float)$possible : 100;
+    $score = round(((float)$achieved / $possible_value) * 100, 2);
+
+    $this->db->query(
+        "REPLACE INTO t_nilai_buzz_detail (id_guru_mapel, id_siswa, tasm, item_id, item_title, nilai)
+         VALUES (?, ?, ?, ?, ?, ?)",
+        [$id_guru_mapel, $id_siswa, $tasm, $item_id, $item_title, $score]
+    );
+}
+
+private function sync_buzz_assignment_average($id_guru_mapel, $id_mapel, $id_siswa, $tasm)
+{
+    $avg_buzz = $this->db->query(
+        "SELECT ROUND(AVG(nilai)) AS avg_val
+         FROM t_nilai_buzz_detail
+         WHERE id_guru_mapel = ? AND id_siswa = ? AND tasm = ?",
+        [$id_guru_mapel, $id_siswa, $tasm]
+    )->row();
+
+    if ($avg_buzz && $avg_buzz->avg_val !== null) {
+        $this->db->query(
+            "REPLACE INTO t_nilai (id_guru_mapel, tasm, jenis, id_mapel_kd, id_siswa, nilai)
+             VALUES (?, ?, 'b', ?, ?, ?)",
+            [$id_guru_mapel, $tasm, $id_mapel, $id_siswa, $avg_buzz->avg_val]
+        );
     }
 }
      
